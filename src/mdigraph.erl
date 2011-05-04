@@ -18,6 +18,8 @@
 %%
 -module(mdigraph).
 
+-include_lib("stdlib/include/qlc.hrl").
+
 -export([new/0, new/1, new/2, delete/1, info/1]).
 -export([add_vertex/1, add_vertex/2, add_vertex/3]).
 -export([del_vertex/2, del_vertices/2]).
@@ -27,6 +29,7 @@
 -export([add_edge/3, add_edge/4, add_edge/5]).
 -export([del_edge/2, del_edges/2, del_path/3]).
 -export([edge/2, no_edges/1, edges/1]).
+-export([update_vertex_label/3]).
 
 -export([out_neighbours/2, in_neighbours/2]).
 -export([out_edges/2, in_edges/2, edges/2]).
@@ -52,7 +55,7 @@
 -type vertex()  :: term().
 -type add_edge_err_rsn() :: {'bad_edge', [vertex()]} | {'bad_vertex', vertex()}.
 
-%-record(vertex, {name, label}).
+-record(vertex, {name, label}).
 -record(edge, {edge, in, out, label}).
 -record(neighbour, {name, edge}).
 %%
@@ -79,7 +82,7 @@ new(Name, Type) ->
 	    V = list_to_atom("vertices-" ++ Name),
 	    E = list_to_atom("edges-" ++ Name),
 	    N = list_to_atom("neighbours-" ++ Name),
-	    mnesia:create_table(V, [{type,set}]),
+	    mnesia:create_table(V, [{type,set}, {attributes, record_info(fields, vertex)}]),
 	    mnesia:create_table(E, [{type,set}, {attributes, record_info(fields, edge)}]),
 	    mnesia:create_table(N, [{type,bag}, {attributes, record_info(fields, neighbour)}]),
 	    Fun = fun() ->
@@ -171,6 +174,10 @@ add_vertex(G, V) ->
 add_vertex(G, V, D) ->
     do_add_vertex({V, D}, G).
 
+-spec update_vertex_label(mdigraph(), vertex(), label()) -> 'true' | 'false'.
+update_vertex_label(G, V, D) ->
+    do_update_vertex({V, D}, G).
+
 -spec del_vertex(mdigraph(), vertex()) -> 'true' | {abort, Reason::any()}.
 del_vertex(G, V) ->
     case do_del_vertex(V, G) of
@@ -179,7 +186,6 @@ del_vertex(G, V) ->
 	{abort, Reason} ->
 	    {abort, Reason}
     end.
-
 
 -spec del_vertices(mdigraph(), [vertex()]) -> 'true'.
 del_vertices(G, Vs) -> 
@@ -600,3 +606,36 @@ follow_path(V, T, P) ->
 
 queue_out_neighbours(V, G, Q0) ->
     lists:foldl(fun(E, Q) -> queue:in(E, Q) end, Q0, out_edges(G, V)).
+
+
+%% -spec do_add_vertex({vertex(), label()}, mdigraph()) -> vertex().
+%% do_add_vertex({V, Label}, G) ->
+%%     Fun = fun()-> mnesia:write(G#mdigraph.vtab, {G#mdigraph.vtab, V, Label}, write) end,
+%%     mnesia:transaction(Fun),
+%%     V.
+
+
+%% update the existing record
+%%-spec(update({Name::string(), RunDate::atom()}, Key::atom(), Value::any()) -> ok | {error, record_not_found}).
+do_update_vertex({V, {Key, Value}}, G) ->
+    F = fun() ->
+    		Q = qlc:q([M || M <- mnesia:table(G#mdigraph.vtab), M#vertex.name =:= V]),
+    		case qlc:e(Q) of
+    		    [] ->
+    			record_not_found;
+    		    Fs ->
+    			over_write(Fs, Key, Value)
+    		end
+        end,
+    case mnesia:transaction(F) of
+	{atomic, ok} ->
+	    ok;
+	{atomic, record_not_found} ->
+	    {error, record_not_found}
+    end.
+
+%% update found record
+over_write([Record | _T], Key, Value) ->
+    New = ec_records_fns:set_rec_value(Key, Value, Record, record_info(fields, vertex)),
+    mnesia:write(New).
+
