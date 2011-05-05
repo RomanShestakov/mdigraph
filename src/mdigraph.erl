@@ -636,7 +636,6 @@ do_update_vertex({V, {Key, Value}, Fn}, G) ->
 
 %% update found record
 over_write([Record | _T], Key, Value, Fn) ->
-    Label = Record#vertex.label,
-    New = Record#vertex{label = Fn(Key, Value, Label)},
-    mnesia:write(New).
-
+    {Tbl, V, Label} = Record,
+    %% update label and write back to db
+    mnesia:write({Tbl, V, Fn(Key, Value, Label)}).
