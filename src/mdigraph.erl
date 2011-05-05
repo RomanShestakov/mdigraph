@@ -29,7 +29,7 @@
 -export([add_edge/3, add_edge/4, add_edge/5]).
 -export([del_edge/2, del_edges/2, del_path/3]).
 -export([edge/2, no_edges/1, edges/1]).
--export([update_vertex_label/3]).
+-export([update_vertex_label/4]).
 
 -export([out_neighbours/2, in_neighbours/2]).
 -export([out_edges/2, in_edges/2, edges/2]).
@@ -174,9 +174,9 @@ add_vertex(G, V) ->
 add_vertex(G, V, D) ->
     do_add_vertex({V, D}, G).
 
--spec update_vertex_label(mdigraph(), vertex(), label()) -> 'true' | 'false'.
-update_vertex_label(G, V, D) ->
-    do_update_vertex({V, D}, G).
+-spec update_vertex_label(mdigraph(), vertex(), label(), fun()) -> 'true' | 'false'.
+update_vertex_label(G, V, D, F) ->
+    do_update_vertex({V, D, F}, G).
 
 -spec del_vertex(mdigraph(), vertex()) -> 'true' | {abort, Reason::any()}.
 del_vertex(G, V) ->
@@ -617,14 +617,14 @@ queue_out_neighbours(V, G, Q0) ->
 
 %% update the existing record
 %%-spec(update({Name::string(), RunDate::atom()}, Key::atom(), Value::any()) -> ok | {error, record_not_found}).
-do_update_vertex({V, {Key, Value}}, G) ->
+do_update_vertex({V, {Key, Value}, Fn}, G) ->
     F = fun() ->
     		Q = qlc:q([M || M <- mnesia:table(G#mdigraph.vtab), M#vertex.name =:= V]),
     		case qlc:e(Q) of
     		    [] ->
     			record_not_found;
     		    Fs ->
-    			over_write(Fs, Key, Value)
+    			over_write(Fs, Key, Value, Fn)
     		end
         end,
     case mnesia:transaction(F) of
@@ -635,7 +635,7 @@ do_update_vertex({V, {Key, Value}}, G) ->
     end.
 
 %% update found record
-over_write([Record | _T], Key, Value) ->
-    New = ec_records_fns:set_rec_value(Key, Value, Record, record_info(fields, vertex)),
+over_write([Record | _T], Key, Value, Fn) ->
+    New = Fn(Key, Value, Record, record_info(fields, vertex)),
     mnesia:write(New).
 
