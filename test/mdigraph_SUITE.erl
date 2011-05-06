@@ -267,15 +267,17 @@ del_path(Config) ->
     ok.
 
 -define(LABEL, lavel_value).
+-record(test, {label_name}).
 update_vertex_label(Config) ->
     MG = ?config(mg, Config),
     MG_V = lists:sort(mdigraph:vertices(MG)),
     ct:log("-> vertices, ~p ", [MG_V]),
     %% update vertices with the same value
-    [mdigraph:update_vertex_label(MG, V, {label, ?LABEL}) || V <- MG_V], 
+    F = fun(Value, _Label) -> Value end,
+    [mdigraph:update_vertex_label(MG, V, F, ?LABEL) || V <- MG_V], 
     %% get new updated values of vertex
     MG_V_1 = lists:sort(mdigraph:vertices(MG)),
-    New_V = [ mdigraph:vertex(MG, V) || V <- MG_V_1],
+    New_V = [mdigraph:vertex(MG, V) || V <- MG_V_1],
     Expected_V = [{V, ?LABEL} || V <- MG_V],
     New_V = Expected_V,
     ct:log("-> new vertices, ~p ", [ New_V ]),

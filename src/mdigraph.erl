@@ -175,8 +175,8 @@ add_vertex(G, V, D) ->
     do_add_vertex({V, D}, G).
 
 -spec update_vertex_label(mdigraph(), vertex(), label(), fun()) -> 'true' | 'false'.
-update_vertex_label(G, V, D, F) ->
-    do_update_vertex({V, D, F}, G).
+update_vertex_label(G, V, F, D) ->
+    do_update_vertex({V, F, D}, G).
 
 -spec del_vertex(mdigraph(), vertex()) -> 'true' | {abort, Reason::any()}.
 del_vertex(G, V) ->
@@ -617,14 +617,14 @@ queue_out_neighbours(V, G, Q0) ->
 
 %% update the existing record
 %%-spec(update({Name::string(), RunDate::atom()}, Key::atom(), Value::any()) -> ok | {error, record_not_found}).
-do_update_vertex({V, {Key, Value}, Fn}, G) ->
+do_update_vertex({V, Fn, Argv}, G) ->
     F = fun() ->
     		Q = qlc:q([M || M <- mnesia:table(G#mdigraph.vtab), M#vertex.name =:= V]),
     		case qlc:e(Q) of
     		    [] ->
     			record_not_found;
     		    Fs ->
-    			over_write(Fs, Key, Value, Fn)
+    			over_write(Fs, Fn, Argv)
     		end
         end,
     case mnesia:transaction(F) of
@@ -635,7 +635,6 @@ do_update_vertex({V, {Key, Value}, Fn}, G) ->
     end.
 
 %% update found record
-over_write([Record | _T], Key, Value, Fn) ->
-    {Tbl, V, Label} = Record,
+over_write([{Tbl, V, Label} | _T], Fn, Argv) ->
     %% update label and write back to db
-    mnesia:write({Tbl, V, Fn(Key, Value, Label)}).
+    mnesia:write({Tbl, V, Fn(Argv, Label)}).
